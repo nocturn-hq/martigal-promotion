@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mawira Admin</title><meta name="robots" content="noindex"><link rel="stylesheet" href="styles.css"></head><body>
+<header><span class="b">Mawira Admin</span><button class="s" onclick="location.reload()">Refresh</button></header><main>
+<div id="lg" class="card" style="max-width:380px;margin:40px auto"><h2>Admin login</h2><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><div class="err" id="er"></div><button id="go" style="width:100%">Log in</button></div>
+<div id="ad" class="hide"><div class="grid" id="st"></div>
+<div class="card"><b>Withdrawal requests</b> <button class="s" onclick="csv()">Export payout CSV</button><div class="w"><table id="wt"></table></div></div>
+<div class="card"><b>Users</b><input id="sr" placeholder="Search username, email or phone"><div class="w"><table id="ut"></table></div><pre id="hx" class="m"></pre></div>
+<div class="card"><b>Settings and withdrawal date</b><div class="grid" id="sf"></div><br><button onclick="save()">Save settings</button></div></div></main>
+<script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+import {SUPABASE_URL,SUPABASE_KEY} from './config.js';
+const db=createClient(SUPABASE_URL,SUPABASE_KEY),$=i=>document.getElementById(i),e=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),on=p=>Date.now()-new Date(p.last_seen)<12e4;
+let P=[],L=[],W=[],S={};const F=['reward_kes','daily_cap','ref_reward_kes','usd_rate','min_withdraw','budget_kes','withdraw_date','banner'];
+$('go').onclick=async()=>{const{error}=await db.auth.signInWithPassword({email:$('em').value,password:$('pw').value});if(error)return $('er').textContent='Login failed';init()};
+async function init(){const{data:{session}}=await db.auth.getSession();if(!session)return;
+const{data:me}=await db.from('profiles').select('role').eq('id',session.user.id).single();
+if(me?.role!='admin'){await db.auth.signOut();return $('er').textContent='This account is not an admin'}
+$('lg').classList.add('hide');$('ad').classList.remove('hide');await load();setInterval(load,3e4)}
+async function load(){const r=await Promise.all([db.from('profiles').select().order('created_at',{ascending:false}),db.from('ledger').select(),db.from('withdrawals').select().order('id',{ascending:false}),db.from('settings').select().single()]);[P,L,W,S]=r.map(x=>x.data);
+const sm=s=>Math.round(L.filter(x=>s.includes(x.status)).reduce((a,x)=>a+ +x.amount,0));
+$('st').innerHTML=[['Users',P.length],['Online now',P.filter(on).length],['Ads watched',L.filter(x=>x.kind=='ad').length],['Pending KES',sm(['pending','approved','requested'])],['Paid KES',sm(['paid'])]].map(([k,v])=>`<div class="card"><div class="m">${k}</div><div class="n">${v}</div></div>`).join('');
+$('wt').innerHTML='<tr><th>User<th>M-Pesa<th>KES<th>Status<th></tr>'+W.map(w=>{const u=P.find(p=>p.id==w.user_id)||{};return`<tr><td>${e(u.username)}<td>${e(w.mpesa)}<td>${w.amount}<td>${w.status}<td>${w.status=='requested'?`<button onclick="act(${w.id},'paid')">Mark paid</button> <button class="s" onclick="act(${w.id},'rejected')">Reject</button>`:e(w.reason)}</tr>`}).join('');
+users();if(!document.activeElement.closest('#sf'))$('sf').innerHTML=F.map(k=>`<label class="m">${k}<input id="f_${k}" value="${e(S[k])}" ${k=='withdraw_date'?'type="date"':''}></label>`).join('')}
+window.users=()=>{const k=$('sr').value.toLowerCase();$('ut').innerHTML='<tr><th>User<th>Email<th>Phone<th>Country<th>Ads<th>KES<th>Status<th></tr>'+P.filter(p=>(p.username+p.email+p.phone).toLowerCase().includes(k)).map(p=>{const r=L.filter(x=>x.user_id==p.id),a=p.status=='active';return`<tr><td>${on(p)?'Online':'Offline'} <a href="#" onclick="hist('${p.id}');return false">${e(p.username)}</a><td>${e(p.email)}<td>${e(p.phone)}<td>${e(p.country)}<td>${r.filter(x=>x.kind=='ad').length}<td>${Math.round(r.filter(x=>x.status!='rejected').reduce((s,x)=>s+ +x.amount,0))}<td>${p.status}<td><button class="s" onclick="flag('${p.id}','${a?'suspended':'active'}')">${a?'Suspend':'Restore'}</button></tr>`}).join('')};
+$('sr').oninput=users;
+window.hist=id=>{$('hx').textContent=L.filter(x=>x.user_id==id).map(x=>x.created_at.slice(0,16)+'  '+x.kind+'  '+x.amount+'  '+x.status).join('\n')||'No activity yet'};
+window.flag=async(id,status)=>{await db.from('profiles').update({status}).eq('id',id);load()};
+window.act=async(id,s)=>{const r=s=='rejected'?prompt('Reason for rejecting?'):'';if(s=='rejected'&&!r)return;await db.rpc('admin_set_withdrawal',{w:id,s,r});load()};
+window.csv=()=>{const rows=W.filter(w=>w.status=='requested').map(w=>[(P.find(p=>p.id==w.user_id)||{}).username,w.mpesa,w.amount].join(','));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['username,mpesa,kes\n'+rows.join('\n')],{type:'text/csv'}));a.download='payouts.csv';a.click()};
+window.save=async()=>{const o={};F.forEach(k=>o[k]=$('f_'+k).value||(k=='banner'||k=='withdraw_date'?null:0));const{error}=await db.from('settings').update(o).eq('id',1);alert(error?error.message:'Saved');load()};
+init();
+</script></body></html>

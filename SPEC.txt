@@ -1,0 +1,61 @@
+Act as a senior full-stack engineer. Build a complete, responsive, free-hosted web platform called "Martigal Promotion" where users watch rewarded ads to earn money in KES, refer others, and withdraw on admin-announced dates. Build it in clear steps (database first, then backend functions, then user site, then admin panel), and give me full working code for every file plus simple deployment steps for a beginner.
+
+## CONTEXT
+- Platform is run by a partnership of agencies. Revenue comes from ads supplied by collaborating ad networks. The agency funds payouts.
+- Target users: Kenya first, then East/West Africa.
+- Launch promo: users earn 25 KES per fully watched ad. Rates will be lowered later, so the rate must be a setting in the admin panel, not hard-coded.
+- Zero-cost hosting: Frontend on Cloudflare Pages, backend on Supabase (Postgres, Auth, Row Level Security, Edge Functions). Do not use Render, because the free tier sleeps and would miss ad-network postbacks.
+- Frontend: HTML, Tailwind CSS, vanilla JavaScript (mobile-first, fast on slow networks).
+
+## USER SIDE
+1. Sign-up form: email, phone number, country (dropdown), username, password, confirm password.
+   - Email, phone and username must each be unique. Check usernames case-insensitively so nobody can copy a name with different capitals.
+   - Strong password: min 8 characters with upper case, lower case, number and symbol, with a live strength meter.
+   - Show clear error messages. Forgot-password flow by email.
+2. Login with email and password.
+3. Dashboard shows: Pending balance, Paid balance, and Total, each in KES and USD (USD uses an exchange rate I set in admin settings). Also shows ads watched today, ads left today, referral link, referral progress bar, and the next withdrawal date announced by admin.
+4. Watch-ad page: "Watch Sponsor Video" button using a rewarded video SDK (AppLixir). Earnings are credited ONLY after the ad network's server-to-server postback confirms a full view. Never credit from the browser.
+5. Optional offers page with a CPA offerwall (CPAgrip or CPALead) with a limit of 2 offers per user per week.
+6. Withdrawal: user requests withdrawal of their pending/approved balance when a withdrawal window is open, entering their M-Pesa number. Minimum withdrawal amount is a setting.
+7. History pages for earnings and withdrawals.
+
+## EARNING LOGIC
+- Every credit and debit is a row in a ledger table. Balances are calculated from the ledger, never typed in by hand.
+- Flow: ad completed (postback) -> credited as PENDING -> admin approves -> becomes AVAILABLE -> withdrawal request -> admin pays manually by M-Pesa and marks PAID. Admin can REJECT with a written reason, and the user sees that reason.
+- Limits enforced on the server: max 5 ads per user per day (rate is editable in admin), max 2 offers per week. Show a friendly countdown when the cap is reached.
+- Duplicate postbacks must be ignored (unique transaction ID).
+- Postback endpoints must verify a secret key or signature and return proper responses.
+
+## REFERRAL SYSTEM
+- Each user gets a unique referral link and code, with one-tap share buttons for WhatsApp and Telegram.
+- A user earns 10 USD (shown in KES too) after 20 verified referrals. A referral counts as verified only after the new user signs up AND completes at least one full ad view.
+- Block self-referrals and duplicate phone/email/device referrals. The reward goes to PENDING and follows the same approval and withdrawal flow.
+- Show a progress bar like "12/20 referred" and a leaderboard-style hype section.
+
+## ADMIN PANEL (separate protected page, admin role only)
+- Dashboard: total users, users online now, ads watched today, total pending, total paid, promo budget remaining.
+- Users table with search and filters: username, email, phone, country, join date, last seen, online status, ads watched, earnings, referral count, status. Click to see each user's full ad history and ledger.
+- Actions: suspend/unsuspend a user, flag as suspicious, approve or reject pending earnings (single and bulk), reject a withdrawal with a reason.
+- Withdrawal control: I announce the withdrawal date from admin. Setting a date opens a withdrawal window, shows the date on every user's dashboard, and closes it after. Show a payout list for that window (username, phone, amount in KES) that I can export to CSV.
+- Settings: reward per ad, ads per day cap, referral reward, USD exchange rate, minimum withdrawal, total promo budget (the site stops crediting new earnings when the budget is used up), and an announcement banner.
+
+## SECURITY AND FRAUD
+- Row Level Security so users only see their own data. Admin routes locked by role.
+- Detect VPN/proxy using a free IP API and block earning actions with a clear message.
+- One account per phone number, with rate limiting on sign-up and login.
+- Log IP and device fingerprint per account and flag duplicates for admin review.
+- Never store secrets in the frontend. Provide a .env.example.
+
+## LANDING PAGE
+- Strong, eye-catching, mobile-first. Hero with a clear promise: "Earn 25 KES for every ad you watch", referral hype section ("Invite 20 friends, earn $10"), how-it-works in 3 steps, live-looking counters, FAQ, payout date banner, and a big Sign Up button.
+- Keep claims accurate: say "launch rate" and "rates may change", and avoid words like "guaranteed" or "unlimited".
+- Include a Terms page covering promo rates, approval of earnings, and the right to reject fraudulent activity.
+
+## DELIVERABLES
+1. Supabase SQL: tables (profiles, ledger, ad_views, offers, referrals, withdrawals, settings, withdrawal_windows), indexes, RLS policies, and the roles.
+2. Edge Functions: postback handlers for the ad network and offerwall, VPN check, referral verification, withdrawal request.
+3. Full frontend: landing page, auth pages, dashboard, ads page, withdrawals page, admin panel.
+4. Folder structure, .env.example, and a README with step-by-step deployment to Cloudflare Pages and Supabase.
+5. A short checklist of what I must configure with the ad networks (publisher accounts, postback URLs, API keys).
+
+Start by confirming your plan in a few lines, then begin with the database SQL.

@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Martigal Promotion – earn for every ad you watch</title><link rel="stylesheet" href="styles.css"><script src="https://cdn.applixir.com/applixir.sdk3.0m.js"></script></head><body>
+<header><span class="b">Martigal Promotion</span><span id="nav"><button class="s" onclick="show('in')">Log in</button> <button onclick="show('up')">Sign up</button></span></header>
+<main>
+<div id="land"><section class="hero"><h1>25 KES for every ad you watch</h1><p>Launch rate. Watch up to 5 sponsor videos a day, invite friends, and get paid on the payout dates we announce. Rates may change.</p><button onclick="show('up')">Create free account</button></section>
+<div class="grid"><div class="card"><b>Sign up free</b><div class="m">Email, phone and a username. No joining fee.</div></div><div class="card"><b>Watch full ads</b><div class="m">Each completed video adds 25 KES to your pending balance.</div></div><div class="card"><b>Get paid</b><div class="m">Request withdrawal when the payout date opens.</div></div></div>
+<div class="card ref"><h2>Invite 20 friends, earn $10</h2><div class="m">Share your link on WhatsApp or Telegram. A friend counts once they watch their first ad.</div></div></div>
+<div id="auth" class="card hide" style="max-width:420px;margin:24px auto"><h2 id="at"></h2>
+<div id="su"><input id="un" placeholder="Username" autocomplete="username"><input id="ph" placeholder="Phone, e.g. +2547XXXXXXXX"><select id="co"><option>Kenya</option><option>Uganda</option><option>Tanzania</option><option>Nigeria</option><option>Ghana</option><option>Other</option></select></div>
+<input id="em" type="email" placeholder="Email" autocomplete="email"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><div id="su2"><input id="pc" type="password" placeholder="Confirm password"><div class="m" id="ps"></div></div>
+<div class="err" id="er"></div><button id="go" style="width:100%">Continue</button><p class="m" id="sw" style="text-align:center;cursor:pointer"></p></div>
+<div id="dash" class="hide"><div class="card hide" id="bn"></div>
+<div class="grid"><div class="card"><div class="m">Pending</div><div class="n" id="bp"></div></div><div class="card"><div class="m">Paid</div><div class="n" id="bd"></div></div><div class="card"><div class="m">Ads today</div><div class="n" id="ad"></div></div></div>
+<div class="card"><button id="wa">Watch sponsor video</button><div id="ap"></div><p class="m" id="wd"></p><input id="mp" placeholder="M-Pesa number"><button class="s" id="wb">Request withdrawal</button></div>
+<div class="card"><b>Your referral link</b><input id="rl" readonly><div class="bar"><i id="rb"></i></div><div class="m" id="rt"></div><br><a id="wh" class="btn" target="_blank" rel="noopener">Share on WhatsApp</a> <a id="tg" class="btn" target="_blank" rel="noopener">Share on Telegram</a></div>
+<div class="card w"><b>Recent earnings</b><table id="hx"></table></div></div>
+</main>
+<script type="module">
+import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+import {SUPABASE_URL,SUPABASE_KEY,APPLIXIR_KEY} from './config.js';
+const db=createClient(SUPABASE_URL,SUPABASE_KEY),$=i=>document.getElementById(i),err=m=>($('er').textContent=m);let mode='up',U;
+const q=new URLSearchParams(location.search);if(q.get('ref'))localStorage.ref=q.get('ref');
+function setMode(m){mode=m;$('auth').classList.remove('hide');$('su').classList.toggle('hide',m=='in');$('su2').classList.toggle('hide',m=='in');$('at').textContent=m=='up'?'Create your account':'Log in';$('sw').textContent=m=='up'?'Already registered? Log in':'New here? Sign up';err('')}
+window.show=setMode;$('sw').onclick=()=>setMode(mode=='up'?'in':'up');
+$('pw').oninput=()=>{const p=$('pw').value,k=[/[a-z]/,/[A-Z]/,/\d/,/\W/].filter(r=>r.test(p)).length+(p.length>=8?1:0);$('ps').textContent=mode=='up'&&p?['Very weak','Weak','Fair','Good','Strong','Strong'][k]:''};
+$('go').onclick=async()=>{err('');const e=$('em').value.trim(),p=$('pw').value;let r;
+if(mode=='up'){const un=$('un').value.trim(),ph=$('ph').value.trim();
+if(!/^[A-Za-z0-9_]{3,20}$/.test(un))return err('Username: 3 to 20 letters, numbers or _');
+if(!/^\+?\d{9,15}$/.test(ph))return err('Enter a valid phone number');
+if(!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W).{8,}$/.test(p))return err('Password needs 8+ characters with upper case, lower case, a number and a symbol');
+if(p!=$('pc').value)return err('Passwords do not match');
+r=await db.auth.signUp({email:e,password:p,options:{data:{username:un,phone:ph,country:$('co').value,ref:localStorage.ref||''}}});
+if(r.error)return err(/database|already|unique/i.test(r.error.message)?'Email, phone or username is already in use':r.error.message);
+if(!r.data.session)return err('Account created. Confirm your email, then log in.')}
+else{r=await db.auth.signInWithPassword({email:e,password:p});if(r.error)return err('Wrong email or password')}
+boot()};
+async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;U=session.user;
+['land','auth'].forEach(i=>$(i).classList.add('hide'));$('dash').classList.remove('hide');
+$('nav').innerHTML='<button class="s" onclick="out()">Log out</button>';await load();db.rpc('touch');setInterval(()=>db.rpc('touch'),6e4)}
+window.out=async()=>{await db.auth.signOut();location.reload()};
+async function load(){const[{data:s},{data:p},{data:l},{data:c}]=await Promise.all([db.from('settings').select().single(),db.from('profiles').select().eq('id',U.id).single(),db.from('ledger').select().order('id',{ascending:false}),db.rpc('my_refs')]);
+const f=k=>Math.round(k)+' KES / $'+(k/s.usd_rate).toFixed(2),sum=st=>l.filter(x=>st.includes(x.status)).reduce((a,x)=>a+ +x.amount,0),day=new Date().toISOString().slice(0,10);
+$('bp').textContent=f(sum(['pending','approved','requested']));$('bd').textContent=f(sum(['paid']));
+const t=l.filter(x=>x.kind=='ad'&&x.created_at.slice(0,10)==day).length;$('ad').textContent=t+' of '+s.daily_cap;$('wa').disabled=t>=s.daily_cap||p.status!='active';
+$('wd').textContent=s.withdraw_date?'Withdrawal date: '+s.withdraw_date:'The next withdrawal date will be announced here.';$('wb').disabled=!s.withdraw_date||new Date()<new Date(s.withdraw_date);
+if(s.banner){$('bn').textContent=s.banner;$('bn').classList.remove('hide')}
+const link=location.origin+'/?ref='+p.ref_code,msg=encodeURIComponent('Earn money watching ads on Martigal Promotion: ');$('rl').value=link;$('rb').style.width=(c%20)*5+'%';$('rt').textContent=c+' friends referred. $10 bonus at every 20.';
+$('wh').href='https://wa.me/?text='+msg+encodeURIComponent(link);$('tg').href='https://t.me/share/url?url='+encodeURIComponent(link)+'&text='+msg;
+$('hx').innerHTML='<tr><th>Date<th>Type<th>KES<th>Status</tr>'+l.slice(0,15).map(x=>`<tr><td>${x.created_at.slice(0,10)}<td>${x.kind}<td>${x.amount}<td>${x.status}</tr>`).join('')}
+$('wa').onclick=()=>{if(typeof initializeAndOpenPlayer!='function')return alert('Ad player is not set up yet');
+initializeAndOpenPlayer({apiKey:APPLIXIR_KEY,injectionElementId:'ap',userId:U.id,adStatusCallbackFn:s=>{if(s.type=='allAdsCompleted')setTimeout(load,4000)},adErrorCallbackFn:()=>alert('No ad available. Try again later.')})};
+$('wb').onclick=async()=>{const m=$('mp').value.trim();if(!/^\+?\d{9,15}$/.test(m))return alert('Enter your M-Pesa number');const{error}=await db.rpc('request_withdraw',{m});alert(error?error.message:'Request sent. You will be paid after review.');load()};
+setMode('up');$('auth').classList.add('hide');boot();
+</script></body></html>
